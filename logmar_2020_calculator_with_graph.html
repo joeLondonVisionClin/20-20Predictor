@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>20/20 Vision Probability Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 15px;
+        }
+        .result {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        canvas {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h2>20/20 Vision Probability Calculator</h2>
+    <label for="mean">Mean LogMAR:</label>
+    <input type="number" id="mean" step="0.01">
+
+    <label for="sd">Standard Deviation (SD):</label>
+    <input type="number" id="sd" step="0.01">
+
+    <label for="n">Number of Eyes:</label>
+    <input type="number" id="n">
+
+    <button onclick="calculateRate()">Calculate</button>
+
+    <div class="result" id="output"></div>
+
+    <canvas id="acuityChart" width="600" height="400"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        function normCDF(x, mean, sd) {
+            let z = (x - mean) / sd;
+            return (1.0 + erf(z / Math.sqrt(2))) / 2.0;
+        }
+
+        function erf(x) {
+            let sign = (x >= 0) ? 1 : -1;
+            x = Math.abs(x);
+
+            const a1 =  0.254829592;
+            const a2 = -0.284496736;
+            const a3 =  1.421413741;
+            const a4 = -1.453152027;
+            const a5 =  1.061405429;
+            const p  =  0.3275911;
+
+            let t = 1.0 / (1.0 + p * x);
+            let y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+
+            return sign * y;
+        }
+
+        let chart;
+
+        function calculateRate() {
+            let mean = parseFloat(document.getElementById('mean').value);
+            let sd = parseFloat(document.getElementById('sd').value);
+            let n = parseInt(document.getElementById('n').value);
+
+            if (isNaN(mean) || isNaN(sd) || isNaN(n) || n <= 0 || sd <= 0) {
+                document.getElementById('output').innerText = 'Please enter valid positive numbers.';
+                return;
+            }
+
+            let p2020 = normCDF(0, mean, sd);
+            let percent2020 = p2020 * 100;
+
+            let se = Math.sqrt((p2020 * (1 - p2020)) / n);
+            let ci_lower = Math.max(0, (p2020 - 1.96 * se) * 100);
+            let ci_upper = Math.min(100, (p2020 + 1.96 * se) * 100);
+
+            document.getElementById('output').innerText = 
+                `Estimated %20/20: ${percent2020.toFixed(2)}%
+95% CI: ${ci_lower.toFixed(2)}% – ${ci_upper.toFixed(2)}%`;
+
+            let thresholds = [-0.1, 0.0, 0.1, 0.18, 0.3];
+            let labels = ["20/16", "20/20", "20/25", "20/30", "20/40"];
+            let values = thresholds.map(t => normCDF(t, mean, sd) * 100);
+
+            if (chart) chart.destroy();
+
+            chart = new Chart(document.getElementById("acuityChart"), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Cumulative % of Eyes',
+                        data: values,
+                        backgroundColor: 'cornflowerblue',
+                        borderColor: 'black',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Cumulative % of Eyes'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Cumulative Snellen VA (20/x or better)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Theoretical UDVA Distribution (Postop)'
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
